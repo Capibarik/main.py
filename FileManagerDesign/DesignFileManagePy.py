@@ -23,9 +23,6 @@ class Ui_MainWindow(object):
         self.horizontalLayout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget)
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.horizontalLayout.setObjectName("horizontalLayout")
-        self.btnBack = QtWidgets.QPushButton(self.horizontalLayoutWidget)
-        self.btnBack.setObjectName("btnBack")
-        self.horizontalLayout.addWidget(self.btnBack)
         self.btnStart = QtWidgets.QPushButton(self.horizontalLayoutWidget)
         self.btnStart.setIconSize(QtCore.QSize(16, 16))
         self.btnStart.setObjectName("btnStart")
@@ -42,7 +39,7 @@ class Ui_MainWindow(object):
         self.panelDynamic = QtWidgets.QListWidget(self.horizontalLayoutWidget_2)
         self.panelDynamic.setFrameShape(QtWidgets.QFrame.Box)
         self.panelDynamic.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.panelDynamic.setLineWidth(3)
+        self.panelDynamic.setLineWidth(1)
         self.panelDynamic.setObjectName("panelDynamic")
         self.horizontalLayout_2.addWidget(self.panelDynamic)
         self.panelStatic = QtWidgets.QListWidget(self.horizontalLayoutWidget_2)
@@ -60,6 +57,5 @@ class Ui_MainWindow(object):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
-        self.btnBack.setText(_translate("MainWindow", "Назад"))
         self.btnStart.setText(_translate("MainWindow", "Открыть"))
         self.btnChangePanel.setText(_translate("MainWindow", "Сменить панель"))
