@@ -4,7 +4,6 @@ from PySide6 import QtWidgets, QtCore, QtGui
 from FileManagerDesign import DesignFileManagePy
 import os
 import sys
-import re
 
 
 class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
@@ -21,7 +20,7 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
         self.panelStatic.itemDoubleClicked.connect(self.changeDirFile)
 
     def isShowDoublePoints(self, pathEx):
-        """Разность между кол-ом директорий в пути и кол-вом "..". Если "точек" будет больше,
+        """Разность между кол-вом директорий в пути и кол-вом "..". Если "точек" будет больше,
         то это значит, что мы вернулись в корневую папку, и возвращаем True, иначе False"""
         pathExList = pathEx.split("\\")[1:]
         quantityDP = pathExList.count("..")
@@ -32,33 +31,37 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
             return False
 
     def ChooseDirectory(self, panel, path="C:\\"):
-        """Выбор директории, узнавая путь до неё и выводя всё, что находится в ней на экран"""
-        isFile = os.path.isfile(path)
-        if isFile:
-            os.startfile(path)
-        else:
-            panel.clear()
-            directory = os.listdir(path)
-            isSDP = self.isShowDoublePoints(path)
-            if not ((path in ("C:\\", "D:\\")) or isSDP):
-                panel.addItem("..")
-            for file in directory:
-                panelWidgets = QtWidgets.QListWidgetItem()
-                panelWidgets.setText(file)
-                panelWidgets.setIcon(self.iconDirItem)
-                panel.addItem(panelWidgets)
+        """Выбор директории, узнавая путь до неё и выводя всё, что находится в ней, на экран"""
+        # isFile = os.path.isfile(path)
+        # if isFile:
+        #     os.startfile(path)
+        # else:
+        panel.clear()
+        directory = os.listdir(path)
+        isSDP = self.isShowDoublePoints(path)
+        if not ((path in ("C:\\", "D:\\")) or isSDP):
+            panel.addItem("..")
+        for file in directory:
+            panelWidgets = QtWidgets.QListWidgetItem()
+            panelWidgets.setText(file)
+            panelWidgets.setIcon(self.iconDirItem)
+            panel.addItem(panelWidgets)
 
     @QtCore.Slot()
     def changeDirFile(self, item):
         """Смена директории или файла. Прибавляем к пути название файла,
-        если же хотим вернуться назад, то нажимаем на '..'"""
+        если же хотим вернуться назад, то прибавляем '..'"""
         sep = ""
         choosePath = item.text()
         if self.currentPath[0] not in self.startPaths:
             sep = "\\"
         self.currentPath[0] += sep + choosePath
-        self.ChooseDirectory(panel=self.panelDynamic, path=self.currentPath[0])
-
+        isFCP = os.path.isfile(self.currentPath[0])
+        if isFCP:
+           os.startfile(self.currentPath[0])
+           self.currentPath[0] = "\\".join(self.currentPath[0].split("\\")[:-1]) # удаляем файл из пути
+        else:
+            self.ChooseDirectory(panel=self.panelDynamic, path=self.currentPath[0])
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
