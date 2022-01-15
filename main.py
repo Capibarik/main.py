@@ -7,6 +7,7 @@ import sys
 import psutil
 import json
 
+
 class DialogSaveSetupWin(QtWidgets.QDialog, DialogSaveSetup.Ui_DialogSaveSetup):
 
     def __init__(self, parent=None):
@@ -19,22 +20,24 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
-        self.currentElems = [self.panelDynamic, self.lblCurrentPathDynamic]
-        self.jsonSetup = {"currentPanel": 0, "currentLabel": 0}
+        self.jsonSetup = self.readSetup()
         # --file
         self.allDisks = self.getLogDisks()
-        self.startPaths = [os.getcwd(), os.getcwd()]
+        self.startPaths = [os.getcwd(), "C:\\"]
         self.currentPath = [self.startPaths[0], self.startPaths[1]]
+        # --not file
         self.currentIndexPath = 0
-        self.currentPanel = self.currentElems[self.jsonSetup["currentPanel"]]
-        self.currentLabel = self.currentElems[self.jsonSetup["currentLabel"]]
+        self.currentPanel = self.panelDynamic
+        self.currentLabel = self.lblCurrentPathDynamic
+        # --not file
         self.iconDirItem = QtGui.QIcon("C:\\Users\\Алексей\\PycharmProjects\\FileManager\\PngPicture\\folder.png")
         self.iconFileItem = QtGui.QIcon("C:\\Users\\Алексей\\PycharmProjects\\FileManager\\PngPicture\\google-docs.png")
-        self.currentSwap = True  # динамичесая панель слева, а статическая - справа
+        self.currentSwap = self.jsonSetup["currentSwap"]  # динамичесая панель слева, а статическая - справа
         # file--
         self.dialog = DialogSaveSetupWin(self)  # инициализация диалогового окна
         self.ShowDir(panel=self.panelDynamic, path=self.startPaths[0], label=self.lblCurrentPathDynamic)
         self.ShowDir(panel=self.panelStatic, path=self.startPaths[1], label=self.lblCurrentPathStatic)
+        self.swapPanels()
         # привязка функций к объектам
         self.panelDynamic.itemDoubleClicked.connect(self.changeDirFile)
         self.panelDynamic.itemClicked.connect(self.curElems)
@@ -58,8 +61,18 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
         if currentItem0.text() == "..":
             self.changeDirFile(currentItem0)
 
+    def readSetup(self):
+        try:
+            with open(os.getcwd() + "\\" + "setup.json", "rt") as setup:
+                readSetup = setup.read()
+                jsonData = json.loads(readSetup)
+            return jsonData
+        except FileNotFoundError:
+            return {"currentSwap": False}
+
     def saveSetup(self):
-        with open("setup.json", "wt") as setup:
+        self.jsonSetup = {"currentSwap": not self.currentSwap}
+        with open(os.getcwd() + "\\" + "setup.json", "wt") as setup:
             jsonData = json.dumps(self.jsonSetup)
             setup.write(jsonData)
 
@@ -94,7 +107,6 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
     def ShowDir(self, panel, label, path):
         """Вывод директории, узнавая путь до неё и выводя всё, что находится в ней, на экран"""
         panel.clear()
-        os.chdir(path)  # меняем директорию реально
         pathfLbl = self.limLenLbl(path)
         label.setText(pathfLbl)
         directory = os.listdir(path)
@@ -115,7 +127,8 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
         """Смена директории или файла. Прибавляем к пути название файла,
         если же хотим вернуться назад, то прибавляем '..'. В начале функции узнаём, откуда
         произошел её вызов, и в соответствие с этим выбираем панель"""
-        curLP, curPanel, indexCP = self.curElems(item)
+        self.curElems(item)
+        curLP, curPanel, indexCP = self.currentLabel, self.currentPanel, self.currentIndexPath
         choosePath = item.text()
         # создание нормального путя (без "..")
         self.currentPath[indexCP] = self.createRPath(indexCP, choosePath)
@@ -130,15 +143,13 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
         """Выставление активных элементов файлового менеджера: надписи, панели, индекса и пути"""
         objListWidget = item.listWidget()
         # на следующих трёх строчках в файл будут записываться данные о нахождении пользователя
-        # переменные посредине - это короткие название переменных справа
-        self.currentIndexPath = indexCP = 0  # индекс пути
-        self.currentPanel = curPanel = self.panelDynamic  # текущая панель
-        self.currentLabel = curLP = self.lblCurrentPathDynamic  # текущая надпись
+        self.currentIndexPath = 0  # индекс пути
+        self.currentPanel = self.panelDynamic  # текущая панель
+        self.currentLabel = self.lblCurrentPathDynamic  # текущая надпись
         if objListWidget == self.panelStatic:
-            self.currentIndexPath = indexCP = 1
-            self.currentPanel = curPanel = self.panelStatic
-            self.currentLabel = curLP = self.lblCurrentPathStatic
-        return curLP, curPanel, indexCP
+            self.currentIndexPath = 1
+            self.currentPanel = self.panelStatic
+            self.currentLabel = self.lblCurrentPathStatic
 
     def createRPath(self, indexCP, choosePath):
         """Создание нормального путя, т.е. без ".." и двойных обратных слешей"""
