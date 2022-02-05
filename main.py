@@ -48,10 +48,17 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
         self.dialogCreateDir = DialogCreateDirWin(self)
         self.dialogRename = DialogRenameWin(self)
         self.mBPathError = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Critical, "Ошибка!", "Путь не найден.", QtWidgets.QMessageBox.Ok) # инициализация окна с сообщением об ошибке
-        self.mBFolderError = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Critical, "Ошибка!", "Неверно заданное имя папки.", QtWidgets.QMessageBox.Ok)
+        self.mBNameError = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Critical, "Ошибка!", "Неверно заданное имя файла.", QtWidgets.QMessageBox.Ok)
         self.mBFolderError2 = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Warning, "Внимание!", "Выберите, в какой панеле\nбудет создана ваша папка.", QtWidgets.QMessageBox.Ok)
+        self.mBChoosePanel = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Warning, "Внимание!", "Выберите панель.", QtWidgets.QMessageBox.Ok)
+        if os.path.exists(self.startPaths[0]) == False:
+            self.startPaths[0] = os.getcwd()
+        if os.path.exists(self.startPaths[1]) == False:
+            self.startPaths[1] = os.getcwd()
         self.ShowDir(panel=self.panelDynamic, path=self.startPaths[0], label=self.lblCurrentPathDynamic)
         self.ShowDir(panel=self.panelStatic, path=self.startPaths[1], label=self.lblCurrentPathStatic)
+        self.changeDirFile(item=self.panelDynamic.item(0), text=self.startPaths[0], start=True)
+        self.changeDirFile(item=self.panelStatic.item(0), text=self.startPaths[1], start=True)
         self.swapPanels()
         self.comboBoxDynamicP.addItems(self.allDisks)
         self.comboBoxStaticP.addItems(self.allDisks)
@@ -65,6 +72,8 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
         self.btnSaveConfigure.clicked.connect(self.dialogSaveSetup.show)
         self.btnUpdate.clicked.connect(self.updateManager)
         self.btnCreateDir.clicked.connect(self.dialogCreateDir.show)
+        self.btnDelete.clicked.connect(lambda: self.delDir(self.currentPanel.currentItem()))
+        self.btnRename.clicked.connect(self.dialogRename.show)
         self.dialogSaveSetup.accepted.connect(self.saveSetup) # на кнопку OK вешаем действие (сохранение состояния)
         self.dialogCreateDir.accepted.connect(lambda: self.createDir(self.currentPanel.currentItem()))
         self.dialogRename.accepted.connect(lambda: self.renameDir(self.currentPanel.currentItem()))
@@ -76,12 +85,18 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
         # горячие клавиши
         swapPanelShortcut = QtGui.QShortcut(QtGui.QKeySequence(QtGui.Qt.CTRL | QtGui.Qt.Key_U), self.btnChangePanel) # смена панелей местами
         swapPanelShortcut.activated.connect(self.swapPanels)
-        openDirFileSc = QtGui.QShortcut(QtGui.QKeySequence(QtGui.Qt.Key_O), self.currentPanel)
+        openDirFileSc = QtGui.QShortcut(QtGui.QKeySequence(QtGui.Qt.Key_Enter), self.currentPanel)
         openDirFileSc.activated.connect(lambda: self.changeDirFile(self.currentPanel.currentItem(), self.currentPanel.currentItem().text()))
         backDirSc = QtGui.QShortcut(QtGui.QKeySequence(QtGui.Qt.Key_Backspace), self.currentPanel)
         backDirSc.activated.connect(self.backDir)
         backRootDirSc = QtGui.QShortcut(QtGui.QKeySequence(QtGui.Qt.Key_Slash), self.currentPanel)
         backRootDirSc.activated.connect(self.backRootDir)
+        renameSc = QtGui.QShortcut(QtGui.QKeySequence(QtGui.Qt.SHIFT | QtGui.Qt.Key_F6), self.currentPanel)
+        renameSc.activated.connect(self.dialogRename.show)
+        delSc = QtGui.QShortcut(QtGui.QKeySequence(QtGui.Qt.Key_Delete), self.currentPanel)
+        delSc.activated.connect(lambda: self.delDir(self.currentPanel.currentItem()))
+        createDirSc = QtGui.QShortcut(QtGui.QKeySequence(QtGui.Qt.Key_F7), self.currentPanel)
+        createDirSc.activated.connect(self.dialogCreateDir.show)
 
     def backRootDir(self):
         """Функция горячей клавиши Slash. Возвращение в корневой каталог"""
@@ -98,6 +113,7 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
             self.changeDirFile(currentItem0, currentItem0.text())
 
     def contextMenuEvent(self, event):
+        """Создание и вывод на экран контекстного меню"""
         currentItem = self.currentPanel.currentItem()
         contextMenu = QtWidgets.QMenu(self)
         openFile = QtGui.QAction("Открыть", self)
@@ -111,40 +127,67 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
         contextMenu.addActions([openFile, renameFile, copyFile, cutFile, delFile])
         contextMenu.exec(event.globalPos())
 
+    def curElems(self, item):
+        """Выставление активных элементов файлового менеджера: надписи, панели, индекса и пути"""
+        objListWidget = item.listWidget()
+        # на следующих трёх строчках будут записываться данные о нахождении пользователя
+        self.currentIndexPath = 0  # индекс пути
+        self.currentPanel = self.panelDynamic  # текущая панель
+        self.currentLabel = self.lblCurrentPathDynamic  # текущая надпись
+        if objListWidget == self.panelStatic:
+            self.currentIndexPath = 1
+            self.currentPanel = self.panelStatic
+            self.currentLabel = self.lblCurrentPathStatic
+
+    @staticmethod
+    def updateManagerDecor(func):
+        """Декоратор для определения пользователя на панелях и обновления менеджера"""
+        def newFunc(self, item):
+            if item is None:
+                self.mBChoosePanel.show()
+            else:
+                self.curElems(item)
+                func(self, item)
+                self.updateManager()
+        return newFunc
+
+    @updateManagerDecor
     def renameDir(self, item):
-        self.curElems(item)
         textOld = item.text()
         textNew = self.dialogRename.editLineNameDir.text()
         currentOldNamePath = self.currentPath[self.currentIndexPath] + "\\" + textOld
         currentNewNamePath = self.currentPath[self.currentIndexPath] + "\\" + textNew
-        os.rename(currentOldNamePath, currentNewNamePath)
-        self.updateManager()
+        try:
+            os.rename(currentOldNamePath, currentNewNamePath)
+        except FileExistsError:
+            self.mBNameError.show()
+        except OSError:
+            self.mBNameError.show()
 
+    @updateManagerDecor
     def delDir(self, item):
         """Удаляем (пустую) папку"""
-        self.curElems(item)
         itemText = item.text()
-        os.rmdir(self.currentPath[self.currentIndexPath] + "\\" + itemText)
-        self.updateManager()
+        delPathFile = self.currentPath[self.currentIndexPath] + "\\" + itemText
+        if os.path.isfile(delPathFile): # если файл, удаляем как файл, нет - как папку
+            os.remove(delPathFile)
+        else:
+            os.rmdir(delPathFile)
 
+    @updateManagerDecor
     def createDir(self, item):
         """Создаем папку, выбрасываем ошибку, если неправильно назван файл"""
         nameDir = self.dialogCreateDir.editLineNameDir.text()
-        if item is None: # если не выбран элемент, а значит и не выбрана панель, то бросаем ошибку
-            self.mBFolderError2.show()
-        else:
-            self.curElems(item)
-            try:
-                os.mkdir(self.currentPath[self.currentIndexPath] + "\\" + nameDir)
-            except FileExistsError:
-                self.mBFolderError.show()
-            except PermissionError:
-                self.mBFolderError.show()
-            self.updateManager()
+        try:
+            os.mkdir(self.currentPath[self.currentIndexPath] + "\\" + nameDir)
+        except FileExistsError:
+            self.mBNameError.show()
+        except PermissionError:
+            self.mBNameError.show()
 
     def readSetup(self):
         try:
-            with open(os.getcwd() + "\\" + "setup.json", "rt") as setup:
+            with open("C:\\Users\\Алексей\\PycharmProjects\\FileManager\\setup.json", "rt") as setup:
                 readSetup = setup.read()
                 jsonData = json.loads(readSetup)
             return jsonData
@@ -169,7 +212,7 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
             "currentSwap": not self.currentSwap,
             "startPaths": [self.currentPath[0], self.currentPath[1]],
         }
-        with open(os.getcwd() + "\\" + "setup.json", "wt") as setup:
+        with open("C:\\Users\\Алексей\\PycharmProjects\\FileManager\\setup.json", "wt") as setup:
             jsonData = json.dumps(self.jsonSetup)
             setup.write(jsonData)
 
@@ -188,7 +231,7 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
 
     def limLenLbl(self, pathEx):
         """Длинные пути (свыше 56 символов) будут сокращаться путём замены ближних к корневой папке директорий
-        на символы точек ("...")"""
+        на точки ("...")"""
         newPath = pathEx
         i = 1
         while len(newPath) > 50 and i < len(newPath.split("\\")) - 1:
@@ -225,7 +268,7 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
         else:
             return bool(os.stat(pathToFile).st_file_attributes & stat.FILE_ATTRIBUTE_HIDDEN)
 
-    def changeDirFile(self, item, text, isChD=False):
+    def changeDirFile(self, item, text, isChD=False, start=False):
         """Смена директории или файла. Прибавляем к пути название файла,
         если же хотим вернуться назад, то прибавляем '..'. В начале функции узнаём, откуда
         произошел её вызов, и в соответствие с этим выбираем панель"""
@@ -240,34 +283,30 @@ class FileManagerApp(QtWidgets.QMainWindow, DesignFileManagePy.Ui_MainWindow):
             else:
                 self.currentPath[indexCP] = self.startPaths[indexCP]
                 self.mBPathError.show()
+                print("Диск")
         else:
             currentPathTemp = self.createRPath(indexCP, choosePath)
-            if currentPathTemp is not None: # если файл существует
-                isHFResult = self.isHiddenFile(currentPathTemp) # является ли файл скрытым
-                if isHFResult == False:
-                    self.currentPath[indexCP] = currentPathTemp
+            if start: # если идет запуск приложения, то нормальный путь - это стартовый путь
+                currentPathTemp = self.startPaths[indexCP]
             else:
-                # если пути не существует, то возвращаем пользователя на стартовый путь и показывем соответствующее сообщение
-                self.currentPath[indexCP] = self.startPaths[indexCP]
-                self.mBPathError.show()
+                if currentPathTemp is not None: # если файл существует
+                    isHFResult = self.isHiddenFile(currentPathTemp) # является ли файл скрытым
+                    if isHFResult == False:
+                        self.currentPath[indexCP] = currentPathTemp
+                else:
+                    # если пути не существует, то возвращаем пользователя на стартовый путь и показывем соответствующее сообщение
+                    self.currentPath[indexCP] = self.startPaths[indexCP]
+                    self.mBPathError.show()
         isFCP = os.path.isfile(self.currentPath[indexCP])
         if isFCP:
-           os.startfile(self.currentPath[indexCP])
-           self.currentPath[indexCP] = "\\".join(self.currentPath[indexCP].split("\\")[:-1]) # удаляем файл из пути
+            try:
+                os.startfile(self.currentPath[indexCP])
+            except OSError as text:
+                print(text, "\n", self.changeDirFile.__doc__)
+            self.currentPath[indexCP] = "\\".join(self.currentPath[indexCP].split("\\")[:-1]) # удаляем файл из пути
         else:
             self.ShowDir(panel=curPanel, path=self.currentPath[indexCP], label=curLP)
-
-    def curElems(self, item):
-        """Выставление активных элементов файлового менеджера: надписи, панели, индекса и пути"""
-        objListWidget = item.listWidget()
-        # на следующих трёх строчках будут записываться данные о нахождении пользователя
-        self.currentIndexPath = 0  # индекс пути
-        self.currentPanel = self.panelDynamic  # текущая панель
-        self.currentLabel = self.lblCurrentPathDynamic  # текущая надпись
-        if objListWidget == self.panelStatic:
-            self.currentIndexPath = 1
-            self.currentPanel = self.panelStatic
-            self.currentLabel = self.lblCurrentPathStatic
+        os.chdir(self.currentPath[indexCP]) # меняем директорию реально
 
     def createRPath(self, indexCP, choosePath):
         """Создание нормального путя, т.е. без ".." и двойных обратных слешей"""
